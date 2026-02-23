@@ -17,17 +17,17 @@ services:
       - postgres_data:/var/lib/postgresql/data
 
   api:
-    build: .
-    container_name: wellsense-api
-    restart: always
-    ports:
-      - "8000:8000"
-    env_file:
-      - .env
-    depends_on:
-      - db
-    environment:
-      DATABASE_URL: postgresql://postgres:postgres@db:5432/wellsense
+   build: .
+   container_name: wellsense-api
+   ports:
+    - "8000:8000"
+   depends_on:
+    - db
+   environment:
+    - DATABASE_URL=postgresql://postgres:postgres@db:5432/wellsense
+    - SECRET_KEY=supersecretkey123
+    - ALGORITHM=HS256
 
+    
 volumes:
   postgres_data:

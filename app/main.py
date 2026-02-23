@@ -5,7 +5,6 @@ from .routes import auth
  
 
 
-models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="WellSense AI")
 app.include_router(auth.router)
