@@ -1,0 +1,29 @@
+ # Python
+__pycache__/
+*.pyc
+venv/
+
+# Environment
+.env
+
+# Docker
+postgres_data/
+
+# Alembic cache
+*.db
+
+# VS Code
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
+
+
+
+
+__pycache__/
+*.pyc
+venv/
+.env
+postgres_data/

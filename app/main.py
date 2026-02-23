@@ -1,6 +1,15 @@
 from fastapi import FastAPI
+from .database import engine
+from . import models
+from .routes import auth
+ 
+
+
+models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="WellSense AI")
+app.include_router(auth.router)
+
 
 @app.get("/")
 def read_root():
@@ -10,3 +19,5 @@ def read_root():
 
 def health_check():
     return {"status": "System running successfully"}
+
+
