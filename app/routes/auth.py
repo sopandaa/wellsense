@@ -61,13 +61,7 @@ def login(email: str, password: str, db: Session = Depends(get_db)):
     }
     )   
     
-    print("🔥 NEW LOGIN ROUTE HIT")
-    print({
-    "sub": user.email,
-    "user_id": user.id,
-    "role": user.role,
-    "company_id": user.company_id
-    })
+     
     
     return {
         "access_token": access_token,
@@ -119,3 +113,38 @@ def admin_dashboard(admin_user: models.User = Depends(require_admin)):
         "email": admin_user.email,
         "role": admin_user.role
     }
+
+
+@router.get("/test-auth")
+def test_auth(current_user: models.User = Depends(get_current_user)):
+    return {
+        "email": current_user.email,
+        "role": current_user.role
+    }
+
+
+
+@router.get("/admin-test")
+def admin_test(current_user: models.User = Depends(require_admin)):
+    return {"message": "Welcome Admin"}
+
+
+
+@router.get("/users")
+def get_users(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    return db.query(models.User).filter(
+        models.User.company_id == current_user.company_id
+    ).all()
+
+
+@router.get("/company-users")
+def company_users(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_admin)
+):
+    return db.query(models.User).filter(
+        models.User.company_id == current_user.company_id
+    ).all()
