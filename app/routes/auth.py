@@ -49,12 +49,30 @@ def login(email: str, password: str, db: Session = Depends(get_db)):
     if not verify_password(password, user.password):
         raise HTTPException(status_code=400, detail="Invalid email or password")
 
-    access_token = create_access_token(data={"sub": user.email})
-
+    
+     
+    
+    access_token = create_access_token(
+    data={
+        "sub": user.email,
+        "user_id": user.id,
+        "role": user.role,
+        "company_id": user.company_id
+    }
+    )   
+    
+    print("🔥 NEW LOGIN ROUTE HIT")
+    print({
+    "sub": user.email,
+    "user_id": user.id,
+    "role": user.role,
+    "company_id": user.company_id
+    })
+    
     return {
         "access_token": access_token,
         "token_type": "bearer"
-    }
+    } 
 
 security = HTTPBearer()
 
