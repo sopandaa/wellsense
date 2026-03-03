@@ -74,6 +74,9 @@ def company_summary(
 
 
 
+
+ 
+
 @router.get("/employee-risk/{employee_id}")
 def employee_risk(
     employee_id: int,
@@ -83,7 +86,6 @@ def employee_risk(
     if current_user.role != "HR":
         raise HTTPException(status_code=403, detail="Only HR can view employee risk")
 
-    # Get last 7 days of records
     seven_days_ago = date.today() - timedelta(days=7)
 
     records = (
@@ -99,35 +101,63 @@ def employee_risk(
     if not records:
         raise HTTPException(status_code=404, detail="No recent records found")
 
-    # Compute averages
+    # --- Feature Engineering ---
     fatigue_avg = sum(r.fatigue_score for r in records) / len(records)
     stress_avg = sum(r.stress_level for r in records) / len(records)
     sleep_avg = sum(r.sleep_hours for r in records) / len(records)
     productivity_avg = sum(r.productivity_score for r in records) / len(records)
 
-    # Burnout scoring formula (rule-based V1)
-    raw_score = (
-        fatigue_avg * 0.35 +
-        stress_avg * 0.35 -
-        sleep_avg * 0.15 -
-        productivity_avg * 0.15
-    )
+    # --- Normalize to 0–1 ---
+    fatigue_norm = fatigue_avg / 10
+    stress_norm = stress_avg / 10
+    sleep_norm = sleep_avg / 8  # assuming 8 hrs ideal
+    productivity_norm = productivity_avg / 10
 
-    burnout_score = max(0, min(100, raw_score * 10))
+    # --- Burnout Score (Clean Formula) ---
+    burnout_score = (
+        fatigue_norm * 0.35 +
+        stress_norm * 0.35 +
+        (1 - sleep_norm) * 0.15 +
+        (1 - productivity_norm) * 0.15
+    ) * 100
 
-    # Simple trend detection (compare last 3 vs first 3 days)
+    burnout_score = max(0, min(100, burnout_score))
+
+    # --- Improved Trend Detection ---
     first_half = records[-3:]
     last_half = records[:3]
 
-    first_avg = sum(r.fatigue_score for r in first_half) / len(first_half)
-    last_avg = sum(r.fatigue_score for r in last_half) / len(last_half)
+    fatigue_trend = (
+        sum(r.fatigue_score for r in last_half) / len(last_half)
+        >
+        sum(r.fatigue_score for r in first_half) / len(first_half)
+    )
 
-    trend = "RISING" if last_avg > first_avg else "DECLINING"
+    stress_trend = (
+        sum(r.stress_level for r in last_half) / len(last_half)
+        >
+        sum(r.stress_level for r in first_half) / len(first_half)
+    )
 
-    # Risk level classification
-    if burnout_score < 40:
+    sleep_trend = (
+        sum(r.sleep_hours for r in last_half) / len(last_half)
+        <
+        sum(r.sleep_hours for r in first_half) / len(first_half)
+    )
+
+    worsening_signals = sum([fatigue_trend, stress_trend, sleep_trend])
+
+    if worsening_signals >= 2:
+        trend = "RISING"
+    elif worsening_signals == 1:
+        trend = "STABLE"
+    else:
+        trend = "DECLINING"
+
+    # --- Risk Classification ---
+    if burnout_score < 35:
         risk_level = "LOW"
-    elif burnout_score < 70:
+    elif burnout_score < 65:
         risk_level = "MODERATE"
     else:
         risk_level = "HIGH"
@@ -137,10 +167,102 @@ def employee_risk(
         "burnout_score": round(burnout_score, 2),
         "risk_level": risk_level,
         "trend": trend,
-        "drivers": {
+        "signals": {
             "fatigue_avg": round(fatigue_avg, 2),
             "stress_avg": round(stress_avg, 2),
             "sleep_avg": round(sleep_avg, 2),
             "productivity_avg": round(productivity_avg, 2)
         }
     }
+
+
+
+
+@router.get("/department-risk")
+def department_risk(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    if current_user.role != "HR":
+        raise HTTPException(status_code=403, detail="Only HR can view department risk")
+
+    # Get all employees in HR's company
+    employees = (
+        db.query(models.User)
+        .filter(
+            models.User.company_id == current_user.company_id,
+            models.User.role.ilike("employee")
+        )
+        .all()
+    )
+
+    if not employees:
+        return []
+
+    department_data = {}
+
+    for employee in employees:
+        records = (
+            db.query(models.WellnessRecord)
+            .filter(models.WellnessRecord.employee_id == employee.id)
+            .order_by(models.WellnessRecord.date.desc())
+            .limit(7)
+            .all()
+        )
+
+        if not records:
+            continue
+
+        fatigue_avg = sum(r.fatigue_score for r in records) / len(records)
+        stress_avg = sum(r.stress_level for r in records) / len(records)
+        sleep_avg = sum(r.sleep_hours for r in records) / len(records)
+        productivity_avg = sum(r.productivity_score for r in records) / len(records)
+
+        # Normalize
+        fatigue_norm = fatigue_avg / 10
+        stress_norm = stress_avg / 10
+        sleep_norm = sleep_avg / 8
+        productivity_norm = productivity_avg / 10
+
+        burnout_score = (
+            fatigue_norm * 0.35 +
+            stress_norm * 0.35 +
+            (1 - sleep_norm) * 0.15 +
+            (1 - productivity_norm) * 0.15
+        ) * 100
+
+        burnout_score = max(0, min(100, burnout_score))
+
+        dept = employee.department or "Unassigned"
+
+        if dept not in department_data:
+            department_data[dept] = {
+                "total_score": 0,
+                "count": 0
+            }
+
+        department_data[dept]["total_score"] += burnout_score
+        department_data[dept]["count"] += 1
+
+    # Build response
+    response = []
+
+    for dept, values in department_data.items():
+        avg_score = values["total_score"] / values["count"]
+
+        if avg_score < 35:
+            risk_level = "LOW"
+        elif avg_score < 65:
+            risk_level = "MODERATE"
+        else:
+            risk_level = "HIGH"
+
+        response.append({
+            "department": dept,
+            "avg_burnout_score": round(avg_score, 2),
+            "risk_level": risk_level,
+            "employee_count": values["count"]
+        })
+ 
+    return response
+    

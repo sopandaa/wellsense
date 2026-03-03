@@ -27,3 +27,23 @@ __pycache__/
 venv/
 .env
 postgres_data/
+
+
+
+
+
+
+# Python
+venv/
+__pycache__/
+*.pyc
+.env
+
+# Node
+node_modules/
+dist/
+frontend/node_modules/
+
+# OS
+.DS_Store
+Thumbs.db
