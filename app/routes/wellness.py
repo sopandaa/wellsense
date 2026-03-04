@@ -379,3 +379,59 @@ def get_company_trend(
     result.sort(key=lambda x: x["date"])
 
     return result
+
+
+
+
+@router.get("/risk-distribution")
+def get_risk_distribution(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    employees = (
+        db.query(models.User)
+        .filter(
+            models.User.company_id == current_user.company_id,
+            models.User.role == "employee"
+        )
+        .all()
+    )
+
+    distribution = {
+        "LOW": 0,
+        "MODERATE": 0,
+        "HIGH": 0
+    }
+
+    for employee in employees:
+        records = (
+            db.query(models.WellnessRecord)
+            .filter(models.WellnessRecord.employee_id == employee.id)
+            .order_by(models.WellnessRecord.date.desc())
+            .limit(7)
+            .all()
+        )
+
+        if not records:
+            continue
+
+        avg_fatigue = sum(r.fatigue_score for r in records) / len(records)
+        avg_stress = sum(r.stress_level for r in records) / len(records)
+        avg_sleep = sum(r.sleep_hours for r in records) / len(records)
+        avg_productivity = sum(r.productivity_score for r in records) / len(records)
+
+        burnout = (
+            avg_fatigue * 0.3 +
+            avg_stress * 0.3 +
+            (10 - avg_sleep) * 0.2 +
+            (10 - avg_productivity) * 0.2
+        )
+
+        if burnout >= 7:
+            distribution["HIGH"] += 1
+        elif burnout >= 4:
+            distribution["MODERATE"] += 1
+        else:
+            distribution["LOW"] += 1
+
+    return distribution
