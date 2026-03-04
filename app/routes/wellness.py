@@ -176,6 +176,74 @@ def employee_risk(
     }
 
 
+@router.get("/employee-risk")
+def all_employee_risk(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    if current_user.role != "HR":
+        raise HTTPException(status_code=403, detail="Only HR can view employee risk")
+
+    # Get all employees in same company
+    employees = db.query(models.User).filter(
+        models.User.company_id == current_user.company_id,
+        models.User.role == "employee"
+    ).all()
+
+    results = []
+
+    for employee in employees:
+        seven_days_ago = date.today() - timedelta(days=7)
+
+        records = (
+            db.query(models.WellnessRecord)
+            .filter(
+                models.WellnessRecord.employee_id == employee.id,
+                models.WellnessRecord.date >= seven_days_ago
+            )
+            .order_by(desc(models.WellnessRecord.date))
+            .all()
+        )
+
+        if not records:
+            continue
+
+        fatigue_avg = sum(r.fatigue_score for r in records) / len(records)
+        stress_avg = sum(r.stress_level for r in records) / len(records)
+        sleep_avg = sum(r.sleep_hours for r in records) / len(records)
+        productivity_avg = sum(r.productivity_score for r in records) / len(records)
+
+        fatigue_norm = fatigue_avg / 10
+        stress_norm = stress_avg / 10
+        sleep_norm = sleep_avg / 8
+        productivity_norm = productivity_avg / 10
+
+        burnout_score = (
+            fatigue_norm * 0.35 +
+            stress_norm * 0.35 +
+            (1 - sleep_norm) * 0.15 +
+            (1 - productivity_norm) * 0.15
+        ) * 100
+
+        burnout_score = max(0, min(100, burnout_score))
+
+        if burnout_score < 35:
+            risk_level = "LOW"
+        elif burnout_score < 65:
+            risk_level = "MODERATE"
+        else:
+            risk_level = "HIGH"
+
+        results.append({
+            "employee_id": employee.id,
+            "name": employee.email,  # change to employee.name if you have it
+            "department": employee.department,
+            "burnout_score": round(burnout_score, 2),
+            "risk_level": risk_level
+        })
+
+    return results
+
 
 
 @router.get("/department-risk")
@@ -266,3 +334,48 @@ def department_risk(
  
     return response
     
+
+
+
+
+@router.get("/company-trend")
+def get_company_trend(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    records = (
+        db.query(models.WellnessRecord)
+        .join(models.User)
+        .filter(models.User.company_id == current_user.company_id)
+        .all()
+    )
+
+    daily_data = {}
+
+    for record in records:
+        burnout = (
+            record.fatigue_score * 0.3 +
+            record.stress_level * 0.3 +
+            (10 - record.sleep_hours) * 0.2 +
+            (10 - record.productivity_score) * 0.2
+        )
+
+        date_str = record.date.strftime("%Y-%m-%d")
+
+        if date_str not in daily_data:
+            daily_data[date_str] = []
+
+        daily_data[date_str].append(burnout)
+
+    result = []
+
+    for date, scores in daily_data.items():
+        avg_burnout = sum(scores) / len(scores)
+        result.append({
+            "date": date,
+            "avg_burnout": round(avg_burnout, 2)
+        })
+
+    result.sort(key=lambda x: x["date"])
+
+    return result
