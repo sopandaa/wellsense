@@ -3,11 +3,11 @@ import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 
 function App() {
+
   const [token, setToken] = useState(localStorage.getItem("token"));
 
-  const handleLogin = (newToken) => {
-    localStorage.setItem("token", newToken);
-    setToken(newToken);
+  const handleLogin = () => {
+    setToken(localStorage.getItem("token"));
   };
 
   const handleLogout = () => {
@@ -15,15 +15,11 @@ function App() {
     setToken(null);
   };
 
-  return (
-    <>
-      {!token ? (
-        <Login onLogin={handleLogin} />
-      ) : (
-        <Dashboard token={token} onLogout={handleLogout} />
-      )}
-    </>
-  );
+  if (!token) {
+    return <Login onLogin={handleLogin} />;
+  }
+
+  return <Dashboard onLogout={handleLogout} />;
 }
 
 export default App;

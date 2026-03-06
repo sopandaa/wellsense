@@ -435,3 +435,48 @@ def get_risk_distribution(
             distribution["LOW"] += 1
 
     return distribution
+
+ 
+
+
+
+@router.get("/ai-insights")
+def ai_insights(db: Session = Depends(get_db)):
+
+    insights = []
+
+    # LOW SLEEP (unique employees)
+    low_sleep = db.query(func.count(func.distinct(models.WellnessRecord.employee_id)))\
+        .filter(models.WellnessRecord.sleep_hours < 6)\
+        .scalar()
+
+    if low_sleep > 0:
+        insights.append(f"{low_sleep} employees sleeping less than 6 hours.")
+
+    # LONG WORK HOURS
+    long_hours = db.query(func.count(func.distinct(models.WellnessRecord.employee_id)))\
+        .filter(models.WellnessRecord.work_hours > 9)\
+        .scalar()
+
+    if long_hours > 0:
+        insights.append(f"{long_hours} employees working more than 9 hours daily.")
+
+    # HIGH FATIGUE
+    fatigue = db.query(func.count(func.distinct(models.WellnessRecord.employee_id)))\
+        .filter(models.WellnessRecord.fatigue_score > 7)\
+        .scalar()
+
+    if fatigue > 0:
+        insights.append(f"{fatigue} employees reporting high fatigue.")
+
+    # LOW PRODUCTIVITY
+    low_productivity = db.query(func.count(func.distinct(models.WellnessRecord.employee_id)))\
+        .filter(models.WellnessRecord.productivity_score < 4)\
+        .scalar()
+
+    if low_productivity > 0:
+        insights.append(f"{low_productivity} employees showing burnout risk.")
+
+    return {
+        "insights": insights
+    }
