@@ -1,3 +1,6 @@
+import { useNavigate } from "react-router-dom";
+
+
 function EmployeeTable({ employees }) {
 
   const getRiskColor = (risk) => {
@@ -5,6 +8,8 @@ function EmployeeTable({ employees }) {
     if (risk === "MODERATE") return "text-yellow-600";
     return "text-green-600";
   };
+
+  const navigate = useNavigate();
 
   return (
     <div className="bg-white rounded-xl shadow-md overflow-hidden">
@@ -20,7 +25,11 @@ function EmployeeTable({ employees }) {
 
         <tbody>
           {employees.map((emp, index) => (
-            <tr key={index} className="border-t">
+             <tr
+              key={index}
+              className="border-t cursor-pointer hover:bg-gray-100"
+              onClick={() => navigate(`/employee/${emp.employee_id}`)}
+             >
               <td className="p-4">{emp.name}</td>
               <td className="p-4">{emp.department}</td>
 

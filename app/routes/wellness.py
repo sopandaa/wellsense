@@ -480,3 +480,26 @@ def ai_insights(db: Session = Depends(get_db)):
     return {
         "insights": insights
     }
+
+
+
+@router.get("/employee-trend/{employee_id}")
+def employee_trend(employee_id: int, db: Session = Depends(get_db)):
+
+    records = db.query(models.WellnessRecord)\
+        .filter(models.WellnessRecord.employee_id == employee_id)\
+        .order_by(models.WellnessRecord.date)\
+        .all()
+
+    result = []
+
+    for r in records:
+        result.append({
+            "date": str(r.date),
+            "sleep": r.sleep_hours,
+            "work": r.work_hours,
+            "fatigue": r.fatigue_score,
+            "productivity": r.productivity_score
+        })
+
+    return result

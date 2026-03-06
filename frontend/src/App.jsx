@@ -1,6 +1,10 @@
+ 
+import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { useState } from "react";
+
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
+import EmployeeProfile from "./pages/EmployeeProfile";
 
 function App() {
 
@@ -10,7 +14,7 @@ function App() {
     setToken(localStorage.getItem("token"));
   };
 
-  const handleLogout = () => {
+  const logout = () => {
     localStorage.removeItem("token");
     setToken(null);
   };
@@ -19,7 +23,19 @@ function App() {
     return <Login onLogin={handleLogin} />;
   }
 
-  return <Dashboard onLogout={handleLogout} />;
+  return (
+    <BrowserRouter>
+
+      <Routes>
+
+        <Route path="/" element={<Dashboard onLogout={logout} />} />
+
+        <Route path="/employee/:id" element={<EmployeeProfile />} />
+
+      </Routes>
+
+    </BrowserRouter>
+  );
 }
 
 export default App;

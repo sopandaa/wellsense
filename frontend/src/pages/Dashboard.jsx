@@ -9,7 +9,7 @@ import RiskPieChart from "../components/charts/RiskPieChart";
 import DepartmentCard from "../components/DepartmentCard";
 import EmployeeTable from "../components/EmployeeTable";
 
-function Dashboard() {
+ function Dashboard({ onLogout }) {
 
   const [departments, setDepartments] = useState([]);
   const [employees, setEmployees] = useState([]);
@@ -55,10 +55,7 @@ function Dashboard() {
     setRiskData(formatted);
   };
 
-  const onLogout = () => {
-    localStorage.removeItem("token");
-    window.location.reload();
-  };
+   
 
   return (
     <div className="min-h-screen bg-gray-100 p-8">
