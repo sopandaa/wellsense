@@ -1,71 +1,81 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import API from "../api/api";
+import Navbar from "../components/Navbar";
 
 import {
   LineChart,
   Line,
   XAxis,
   YAxis,
-  CartesianGrid,
   Tooltip,
-  ResponsiveContainer
+  CartesianGrid,
+  ResponsiveContainer,
 } from "recharts";
 
-function EmployeeProfile() {
+function EmployeeProfile({ onLogout }) {
 
   const { id } = useParams();
-  const [data, setData] = useState([]);
+
+  const [trend, setTrend] = useState([]);
+  const [burnout, setBurnout] = useState(null);
 
   useEffect(() => {
     fetchTrend();
+    fetchRisk();
   }, []);
 
   const fetchTrend = async () => {
     const res = await API.get(`/wellness/employee-trend/${id}`);
-    setData(res.data);
+    setTrend(res.data);
   };
 
-  return (
+  const fetchRisk = async () => {
+    const res = await API.get(`/wellness/employee-risk/${id}`);
+    setBurnout(res.data);
+  };
 
+  if (!burnout) {
+    return <div className="p-10">Loading...</div>;
+  }
+
+  return (
     <div className="min-h-screen bg-gray-100 p-8">
 
-      <h1 className="text-3xl font-bold mb-8">
-        Employee Wellness Trend
+      <Navbar onLogout={onLogout} />
+
+      <h1 className="text-3xl font-bold mb-6">
+        Employee ID: {burnout.employee_id}
       </h1>
+
+      <p className="mb-2">
+        Risk Level: {burnout.risk_level}
+      </p>
+
+      <p className="mb-8">
+        Current Burnout Score: {burnout.burnout_score}
+      </p>
+
+      <h2 className="text-xl font-bold mb-4">
+        Burnout Trend
+      </h2>
 
       <div className="bg-white p-6 rounded-xl shadow-md">
 
-        <ResponsiveContainer width="100%" height={400}>
-          <LineChart data={data}>
+        <ResponsiveContainer width="100%" height={300}>
+
+          <LineChart data={trend}>
 
             <CartesianGrid strokeDasharray="3 3" />
-
             <XAxis dataKey="date" />
-
             <YAxis />
-
             <Tooltip />
 
             <Line
               type="monotone"
-              dataKey="sleep"
-              stroke="#22c55e"
-              name="Sleep Hours"
-            />
-
-            <Line
-              type="monotone"
-              dataKey="work"
-              stroke="#3b82f6"
-              name="Work Hours"
-            />
-
-            <Line
-              type="monotone"
-              dataKey="fatigue"
+              dataKey="burnout"
               stroke="#ef4444"
-              name="Fatigue Score"
+              strokeWidth={3}
             />
 
           </LineChart>

@@ -20,7 +20,7 @@ function BurnoutTrendChart({ data }) {
 
           <Line
             type="monotone"
-            dataKey="avg_burnout"
+            dataKey="burnout"
             stroke="#ef4444"
             strokeWidth={3}
           />

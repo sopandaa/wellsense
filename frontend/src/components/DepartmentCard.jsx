@@ -13,7 +13,7 @@ function DepartmentCard({ dept }) {
       </h2>
 
       <p className="mt-2">
-        Avg Burnout: {dept.avg_burnout_score}
+        Avg Burnout: {dept.avg_burnout}
       </p>
 
       <p className={`mt-2 font-bold ${getRiskColor(dept.risk_level)}`}>

@@ -9,18 +9,20 @@ import RiskPieChart from "../components/charts/RiskPieChart";
 import DepartmentCard from "../components/DepartmentCard";
 import EmployeeTable from "../components/EmployeeTable";
 
- function Dashboard({ onLogout }) {
+function Dashboard({ onLogout }) {
 
   const [departments, setDepartments] = useState([]);
   const [employees, setEmployees] = useState([]);
   const [trendData, setTrendData] = useState([]);
   const [riskData, setRiskData] = useState([]);
+  const [insights, setInsights] = useState([]);
 
   useEffect(() => {
     fetchDepartments();
     fetchEmployees();
     fetchTrend();
     fetchRiskDistribution();
+    fetchInsights();
   }, []);
 
   const fetchDepartments = async () => {
@@ -55,16 +57,17 @@ import EmployeeTable from "../components/EmployeeTable";
     setRiskData(formatted);
   };
 
-   
+  const fetchInsights = async () => {
+    const res = await API.get("/wellness/ai-insights");
+    setInsights(res.data.insights);
+  };
 
   return (
     <div className="min-h-screen bg-gray-100 p-8">
 
       <Navbar onLogout={onLogout} />
 
-
-      <AIInsights />
-
+      <AIInsights insights={insights} />
 
       <h2 className="text-xl font-bold mb-4">
         Burnout Trend
@@ -89,7 +92,7 @@ import EmployeeTable from "../components/EmployeeTable";
       </div>
 
       <h2 className="text-xl font-bold mb-4">
-        Top High Risk Employees
+        Top 5 High Risk Employees
       </h2>
 
       <EmployeeTable employees={employees} />

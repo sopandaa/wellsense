@@ -1,7 +1,8 @@
 import { useNavigate } from "react-router-dom";
 
-
 function EmployeeTable({ employees }) {
+
+  const navigate = useNavigate();
 
   const getRiskColor = (risk) => {
     if (risk === "HIGH") return "text-red-600";
@@ -9,11 +10,14 @@ function EmployeeTable({ employees }) {
     return "text-green-600";
   };
 
-  const navigate = useNavigate();
+  if (!employees || employees.length === 0) {
+    return <p className="text-gray-500">No employees found.</p>;
+  }
 
   return (
     <div className="bg-white rounded-xl shadow-md overflow-hidden">
       <table className="w-full text-left">
+
         <thead className="bg-gray-100">
           <tr>
             <th className="p-4">Employee</th>
@@ -24,12 +28,12 @@ function EmployeeTable({ employees }) {
         </thead>
 
         <tbody>
-          {employees.map((emp, index) => (
-             <tr
-              key={index}
-              className="border-t cursor-pointer hover:bg-gray-100"
+          {employees.map((emp) => (
+            <tr
+              key={emp.employee_id}
               onClick={() => navigate(`/employee/${emp.employee_id}`)}
-             >
+              className="cursor-pointer hover:bg-gray-50"
+            >
               <td className="p-4">{emp.name}</td>
               <td className="p-4">{emp.department}</td>
 
@@ -43,6 +47,7 @@ function EmployeeTable({ employees }) {
             </tr>
           ))}
         </tbody>
+
       </table>
     </div>
   );

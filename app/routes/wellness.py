@@ -5,186 +5,26 @@ from app import models, schemas
 from app.routes.auth import get_current_user  # adjust if different location
 from sqlalchemy import func, desc
 from datetime import date, timedelta
- 
+
+from app.services.burnout_service import calculate_burnout
+from collections import defaultdict
 
 
-router = APIRouter(
-    prefix="/wellness",
-    tags=["Wellness"]
-)
-
-@router.post("/", response_model=schemas.WellnessResponse)
-def submit_wellness(
-    data: schemas.WellnessCreate,
-    db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user)
-):
-    if current_user.role != "employee":
-        raise HTTPException(status_code=403, detail="Only employees can submit wellness data")
-
-    record = models.WellnessRecord(
-        employee_id=current_user.id,
-        work_hours=data.work_hours,
-        fatigue_score=data.fatigue_score,
-        stress_level=data.stress_level,
-        sleep_hours=data.sleep_hours,
-        productivity_score=data.productivity_score
-    )
-
-    db.add(record)
-    db.commit()
-    db.refresh(record)
-
-    return record
+router = APIRouter(prefix="/wellness", tags=["Wellness"])
 
 
-
-
-
-
-@router.get("/company-summary")
-def company_summary(
-    db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user)
-):
-    if current_user.role != "HR":
-        raise HTTPException(status_code=403, detail="Only HR can view company summary")
-
-    result = (
-        db.query(
-            func.avg(models.WellnessRecord.fatigue_score),
-            func.avg(models.WellnessRecord.stress_level),
-            func.avg(models.WellnessRecord.sleep_hours),
-            func.avg(models.WellnessRecord.productivity_score),
-            func.count(models.WellnessRecord.id),
-        )
-        .join(models.User, models.User.id == models.WellnessRecord.employee_id)
-        .filter(models.User.company_id == current_user.company_id)
-        .first()
-    )
-
-    return {
-        "avg_fatigue": float(result[0] or 0),
-        "avg_stress": float(result[1] or 0),
-        "avg_sleep": float(result[2] or 0),
-        "avg_productivity": float(result[3] or 0),
-        "total_records": result[4] or 0
-    }
-
-
-
-
-
- 
-
-@router.get("/employee-risk/{employee_id}")
-def employee_risk(
-    employee_id: int,
-    db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user)
-):
-    if current_user.role != "HR":
-        raise HTTPException(status_code=403, detail="Only HR can view employee risk")
-
-    seven_days_ago = date.today() - timedelta(days=7)
-
-    records = (
-        db.query(models.WellnessRecord)
-        .filter(
-            models.WellnessRecord.employee_id == employee_id,
-            models.WellnessRecord.date >= seven_days_ago
-        )
-        .order_by(desc(models.WellnessRecord.date))
-        .all()
-    )
-
-    if not records:
-        raise HTTPException(status_code=404, detail="No recent records found")
-
-    # --- Feature Engineering ---
-    fatigue_avg = sum(r.fatigue_score for r in records) / len(records)
-    stress_avg = sum(r.stress_level for r in records) / len(records)
-    sleep_avg = sum(r.sleep_hours for r in records) / len(records)
-    productivity_avg = sum(r.productivity_score for r in records) / len(records)
-
-    # --- Normalize to 0–1 ---
-    fatigue_norm = fatigue_avg / 10
-    stress_norm = stress_avg / 10
-    sleep_norm = sleep_avg / 8  # assuming 8 hrs ideal
-    productivity_norm = productivity_avg / 10
-
-    # --- Burnout Score (Clean Formula) ---
-    burnout_score = (
-        fatigue_norm * 0.35 +
-        stress_norm * 0.35 +
-        (1 - sleep_norm) * 0.15 +
-        (1 - productivity_norm) * 0.15
-    ) * 100
-
-    burnout_score = max(0, min(100, burnout_score))
-
-    # --- Improved Trend Detection ---
-    first_half = records[-3:]
-    last_half = records[:3]
-
-    fatigue_trend = (
-        sum(r.fatigue_score for r in last_half) / len(last_half)
-        >
-        sum(r.fatigue_score for r in first_half) / len(first_half)
-    )
-
-    stress_trend = (
-        sum(r.stress_level for r in last_half) / len(last_half)
-        >
-        sum(r.stress_level for r in first_half) / len(first_half)
-    )
-
-    sleep_trend = (
-        sum(r.sleep_hours for r in last_half) / len(last_half)
-        <
-        sum(r.sleep_hours for r in first_half) / len(first_half)
-    )
-
-    worsening_signals = sum([fatigue_trend, stress_trend, sleep_trend])
-
-    if worsening_signals >= 2:
-        trend = "RISING"
-    elif worsening_signals == 1:
-        trend = "STABLE"
-    else:
-        trend = "DECLINING"
-
-    # --- Risk Classification ---
-    if burnout_score < 35:
-        risk_level = "LOW"
-    elif burnout_score < 65:
-        risk_level = "MODERATE"
-    else:
-        risk_level = "HIGH"
-
-    return {
-        "employee_id": employee_id,
-        "burnout_score": round(burnout_score, 2),
-        "risk_level": risk_level,
-        "trend": trend,
-        "signals": {
-            "fatigue_avg": round(fatigue_avg, 2),
-            "stress_avg": round(stress_avg, 2),
-            "sleep_avg": round(sleep_avg, 2),
-            "productivity_avg": round(productivity_avg, 2)
-        }
-    }
-
-
+# -----------------------------
+# TOP 5 HIGH RISK EMPLOYEES
+# -----------------------------
 @router.get("/employee-risk")
-def all_employee_risk(
+def employee_risk(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
+
     if current_user.role != "HR":
         raise HTTPException(status_code=403, detail="Only HR can view employee risk")
 
-    # Get all employees in same company
     employees = db.query(models.User).filter(
         models.User.company_id == current_user.company_id,
         models.User.role == "employee"
@@ -193,209 +33,165 @@ def all_employee_risk(
     results = []
 
     for employee in employees:
-        seven_days_ago = date.today() - timedelta(days=7)
 
         records = (
             db.query(models.WellnessRecord)
-            .filter(
-                models.WellnessRecord.employee_id == employee.id,
-                models.WellnessRecord.date >= seven_days_ago
-            )
+            .filter(models.WellnessRecord.employee_id == employee.id)
             .order_by(desc(models.WellnessRecord.date))
+            .limit(7)
             .all()
         )
 
-        if not records:
+        result = calculate_burnout(records)
+
+        if not result:
             continue
 
-        fatigue_avg = sum(r.fatigue_score for r in records) / len(records)
-        stress_avg = sum(r.stress_level for r in records) / len(records)
-        sleep_avg = sum(r.sleep_hours for r in records) / len(records)
-        productivity_avg = sum(r.productivity_score for r in records) / len(records)
-
-        fatigue_norm = fatigue_avg / 10
-        stress_norm = stress_avg / 10
-        sleep_norm = sleep_avg / 8
-        productivity_norm = productivity_avg / 10
-
-        burnout_score = (
-            fatigue_norm * 0.35 +
-            stress_norm * 0.35 +
-            (1 - sleep_norm) * 0.15 +
-            (1 - productivity_norm) * 0.15
-        ) * 100
-
-        burnout_score = max(0, min(100, burnout_score))
-
-        if burnout_score < 35:
-            risk_level = "LOW"
-        elif burnout_score < 65:
-            risk_level = "MODERATE"
-        else:
-            risk_level = "HIGH"
+        score, risk = result
 
         results.append({
             "employee_id": employee.id,
-            "name": employee.email,  # change to employee.name if you have it
+            "name": employee.email,
             "department": employee.department,
-            "burnout_score": round(burnout_score, 2),
-            "risk_level": risk_level
+            "burnout_score": score,
+            "risk_level": risk
         })
+
+    results.sort(key=lambda x: x["burnout_score"], reverse=True)
 
     return results
 
 
-
+# -----------------------------
+# DEPARTMENT RISK
+# -----------------------------
 @router.get("/department-risk")
 def department_risk(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
+
     if current_user.role != "HR":
-        raise HTTPException(status_code=403, detail="Only HR can view department risk")
+        raise HTTPException(status_code=403)
 
-    # Get all employees in HR's company
-    employees = (
-        db.query(models.User)
-        .filter(
-            models.User.company_id == current_user.company_id,
-            models.User.role.ilike("employee")
-        )
-        .all()
-    )
-
-    if not employees:
-        return []
+    employees = db.query(models.User).filter(
+        models.User.company_id == current_user.company_id,
+        models.User.role == "employee"
+    ).all()
 
     department_data = {}
 
     for employee in employees:
-        records = (
-            db.query(models.WellnessRecord)
-            .filter(models.WellnessRecord.employee_id == employee.id)
-            .order_by(models.WellnessRecord.date.desc())
-            .limit(7)
-            .all()
-        )
 
-        if not records:
+        records = db.query(models.WellnessRecord).filter(
+            models.WellnessRecord.employee_id == employee.id
+        ).order_by(models.WellnessRecord.date.desc()).limit(7).all()
+
+        result = calculate_burnout(records)
+
+        if not result:
             continue
 
-        fatigue_avg = sum(r.fatigue_score for r in records) / len(records)
-        stress_avg = sum(r.stress_level for r in records) / len(records)
-        sleep_avg = sum(r.sleep_hours for r in records) / len(records)
-        productivity_avg = sum(r.productivity_score for r in records) / len(records)
+        score, _ = result
 
-        # Normalize
-        fatigue_norm = fatigue_avg / 10
-        stress_norm = stress_avg / 10
-        sleep_norm = sleep_avg / 8
-        productivity_norm = productivity_avg / 10
-
-        burnout_score = (
-            fatigue_norm * 0.35 +
-            stress_norm * 0.35 +
-            (1 - sleep_norm) * 0.15 +
-            (1 - productivity_norm) * 0.15
-        ) * 100
-
-        burnout_score = max(0, min(100, burnout_score))
-
-        dept = employee.department or "Unassigned"
+        dept = employee.department
 
         if dept not in department_data:
             department_data[dept] = {
-                "total_score": 0,
-                "count": 0
+                "scores": [],
+                "employee_count": 0
             }
 
-        department_data[dept]["total_score"] += burnout_score
-        department_data[dept]["count"] += 1
+        department_data[dept]["scores"].append(score)
+        department_data[dept]["employee_count"] += 1
 
-    # Build response
     response = []
 
-    for dept, values in department_data.items():
-        avg_score = values["total_score"] / values["count"]
+    for dept, data in department_data.items():
+
+        avg_score = sum(data["scores"]) / len(data["scores"])
 
         if avg_score < 35:
-            risk_level = "LOW"
+            risk = "LOW"
         elif avg_score < 65:
-            risk_level = "MODERATE"
+            risk = "MODERATE"
         else:
-            risk_level = "HIGH"
+            risk = "HIGH"
 
         response.append({
             "department": dept,
-            "avg_burnout_score": round(avg_score, 2),
-            "risk_level": risk_level,
-            "employee_count": values["count"]
+            "avg_burnout": round(avg_score, 2),
+            "risk_level": risk,
+            "employee_count": data["employee_count"]
         })
- 
+
     return response
-    
 
-
-
-
+# -----------------------------
+# COMPANY TREND
+# -----------------------------
 @router.get("/company-trend")
-def get_company_trend(
+def company_trend(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
-    records = (
-        db.query(models.WellnessRecord)
-        .join(models.User)
-        .filter(models.User.company_id == current_user.company_id)
-        .all()
-    )
 
-    daily_data = {}
+    if current_user.role != "HR":
+        raise HTTPException(status_code=403, detail="Only HR can view company trend")
+
+    employees = db.query(models.User).filter(
+        models.User.company_id == current_user.company_id,
+        models.User.role == "employee"
+    ).all()
+
+    employee_ids = [e.id for e in employees]
+
+    records = db.query(models.WellnessRecord).filter(
+        models.WellnessRecord.employee_id.in_(employee_ids)
+    ).all()
+
+    date_scores = defaultdict(list)
 
     for record in records:
-        burnout = (
-            record.fatigue_score * 0.3 +
-            record.stress_level * 0.3 +
-            (10 - record.sleep_hours) * 0.2 +
-            (10 - record.productivity_score) * 0.2
-        )
 
-        date_str = record.date.strftime("%Y-%m-%d")
+        result = calculate_burnout([record])
 
-        if date_str not in daily_data:
-            daily_data[date_str] = []
+        if not result:
+            continue
 
-        daily_data[date_str].append(burnout)
+        score, _ = result
 
-    result = []
+        date_scores[str(record.date)].append(score)
 
-    for date, scores in daily_data.items():
-        avg_burnout = sum(scores) / len(scores)
-        result.append({
-            "date": date,
-            "avg_burnout": round(avg_burnout, 2)
+    trend = []
+
+    for d, scores in date_scores.items():
+        trend.append({
+            "date": d,
+            "burnout": round(sum(scores) / len(scores), 2)
         })
 
-    result.sort(key=lambda x: x["date"])
+    trend.sort(key=lambda x: x["date"])
 
-    return result
-
-
+    return trend
 
 
+# -----------------------------
+# RISK DISTRIBUTION
+# -----------------------------
 @router.get("/risk-distribution")
-def get_risk_distribution(
+def risk_distribution(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
-    employees = (
-        db.query(models.User)
-        .filter(
-            models.User.company_id == current_user.company_id,
-            models.User.role == "employee"
-        )
-        .all()
-    )
+
+    if current_user.role != "HR":
+        raise HTTPException(status_code=403, detail="Only HR can view risk distribution")
+
+    employees = db.query(models.User).filter(
+        models.User.company_id == current_user.company_id,
+        models.User.role == "employee"
+    ).all()
 
     distribution = {
         "LOW": 0,
@@ -404,102 +200,164 @@ def get_risk_distribution(
     }
 
     for employee in employees:
+
         records = (
             db.query(models.WellnessRecord)
             .filter(models.WellnessRecord.employee_id == employee.id)
-            .order_by(models.WellnessRecord.date.desc())
+            .order_by(desc(models.WellnessRecord.date))
             .limit(7)
+            .all()
+        )
+
+        result = calculate_burnout(records)
+
+        if not result:
+            continue
+
+        score, risk = result
+
+        distribution[risk] += 1
+
+    return distribution
+
+
+# -----------------------------
+# EMPLOYEE PROFILE
+# -----------------------------
+@router.get("/employee-risk/{employee_id}")
+def employee_profile(
+    employee_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+
+    records = (
+        db.query(models.WellnessRecord)
+        .filter(models.WellnessRecord.employee_id == employee_id)
+        .order_by(desc(models.WellnessRecord.date))
+        .limit(7)
+        .all()
+    )
+
+    if not records:
+        return {
+            "employee_id": employee_id,
+            "burnout_score": 0,
+            "risk_level": "LOW"
+        }
+
+    score, risk = calculate_burnout(records)
+
+    return {
+        "employee_id": employee_id,
+        "burnout_score": score,
+        "risk_level": risk
+    }
+
+
+# -----------------------------
+# EMPLOYEE TREND
+# -----------------------------
+@router.get("/employee-trend/{employee_id}")
+def employee_trend(
+    employee_id: int,
+    db: Session = Depends(get_db),
+):
+
+    records = (
+        db.query(models.WellnessRecord)
+        .filter(models.WellnessRecord.employee_id == employee_id)
+        .order_by(models.WellnessRecord.date)
+        .all()
+    )
+
+    trend = []
+
+    for r in records:
+
+        result = calculate_burnout([r])
+
+        if not result:
+            continue
+
+        score, _ = result
+
+        trend.append({
+            "date": str(r.date),
+            "burnout": score
+        })
+
+    return trend
+
+
+
+
+@router.get("/ai-insights")
+def ai_insights(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+
+    insights = []
+
+    seven_days_ago = date.today() - timedelta(days=7)
+
+    employees = db.query(models.User).filter(
+        models.User.company_id == current_user.company_id,
+        models.User.role == "employee"
+    ).all()
+
+    low_sleep = 0
+    long_hours = 0
+    high_fatigue = 0
+    low_productivity = 0
+
+    for employee in employees:
+
+        records = (
+            db.query(models.WellnessRecord)
+            .filter(
+                models.WellnessRecord.employee_id == employee.id,
+                models.WellnessRecord.date >= seven_days_ago
+            )
             .all()
         )
 
         if not records:
             continue
 
-        avg_fatigue = sum(r.fatigue_score for r in records) / len(records)
-        avg_stress = sum(r.stress_level for r in records) / len(records)
         avg_sleep = sum(r.sleep_hours for r in records) / len(records)
+        avg_hours = sum(r.work_hours for r in records) / len(records)
+        avg_fatigue = sum(r.fatigue_score for r in records) / len(records)
         avg_productivity = sum(r.productivity_score for r in records) / len(records)
 
-        burnout = (
-            avg_fatigue * 0.3 +
-            avg_stress * 0.3 +
-            (10 - avg_sleep) * 0.2 +
-            (10 - avg_productivity) * 0.2
-        )
+        if avg_sleep < 6:
+            low_sleep += 1
 
-        if burnout >= 7:
-            distribution["HIGH"] += 1
-        elif burnout >= 4:
-            distribution["MODERATE"] += 1
-        else:
-            distribution["LOW"] += 1
+        if avg_hours > 9:
+            long_hours += 1
 
-    return distribution
+        if avg_fatigue > 7:
+            high_fatigue += 1
 
- 
+        if avg_productivity < 4:
+            low_productivity += 1
 
+    if low_sleep:
+        insights.append(f"{low_sleep} employees sleeping less than 6 hours on average this week.")
 
-
-@router.get("/ai-insights")
-def ai_insights(db: Session = Depends(get_db)):
-
-    insights = []
-
-    # LOW SLEEP (unique employees)
-    low_sleep = db.query(func.count(func.distinct(models.WellnessRecord.employee_id)))\
-        .filter(models.WellnessRecord.sleep_hours < 6)\
-        .scalar()
-
-    if low_sleep > 0:
-        insights.append(f"{low_sleep} employees sleeping less than 6 hours.")
-
-    # LONG WORK HOURS
-    long_hours = db.query(func.count(func.distinct(models.WellnessRecord.employee_id)))\
-        .filter(models.WellnessRecord.work_hours > 9)\
-        .scalar()
-
-    if long_hours > 0:
+    if long_hours:
         insights.append(f"{long_hours} employees working more than 9 hours daily.")
 
-    # HIGH FATIGUE
-    fatigue = db.query(func.count(func.distinct(models.WellnessRecord.employee_id)))\
-        .filter(models.WellnessRecord.fatigue_score > 7)\
-        .scalar()
+    if high_fatigue:
+        insights.append(f"{high_fatigue} employees reporting high fatigue.")
 
-    if fatigue > 0:
-        insights.append(f"{fatigue} employees reporting high fatigue.")
+    if low_productivity:
+        insights.append(f"{low_productivity} employees showing burnout risk due to low productivity.")
 
-    # LOW PRODUCTIVITY
-    low_productivity = db.query(func.count(func.distinct(models.WellnessRecord.employee_id)))\
-        .filter(models.WellnessRecord.productivity_score < 4)\
-        .scalar()
-
-    if low_productivity > 0:
-        insights.append(f"{low_productivity} employees showing burnout risk.")
+    if not insights:
+        insights.append("No major burnout risks detected this week.")
 
     return {
         "insights": insights
     }
-
-
-
-@router.get("/employee-trend/{employee_id}")
-def employee_trend(employee_id: int, db: Session = Depends(get_db)):
-
-    records = db.query(models.WellnessRecord)\
-        .filter(models.WellnessRecord.employee_id == employee_id)\
-        .order_by(models.WellnessRecord.date)\
-        .all()
-
-    result = []
-
-    for r in records:
-        result.append({
-            "date": str(r.date),
-            "sleep": r.sleep_hours,
-            "work": r.work_hours,
-            "fatigue": r.fatigue_score,
-            "productivity": r.productivity_score
-        })
-
-    return result
