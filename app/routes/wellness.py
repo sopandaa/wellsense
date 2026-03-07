@@ -292,6 +292,8 @@ def employee_trend(
 
 
 
+  
+
 @router.get("/ai-insights")
 def ai_insights(
     db: Session = Depends(get_db),
@@ -299,8 +301,10 @@ def ai_insights(
 ):
 
     insights = []
+    recommendations = []
 
-    seven_days_ago = date.today() - timedelta(days=7)
+    today = date.today()
+    seven_days_ago = today - timedelta(days=7)
 
     employees = db.query(models.User).filter(
         models.User.company_id == current_user.company_id,
@@ -311,17 +315,16 @@ def ai_insights(
     long_hours = 0
     high_fatigue = 0
     low_productivity = 0
+    high_burnout = 0
+
+    department_scores = {}
 
     for employee in employees:
 
-        records = (
-            db.query(models.WellnessRecord)
-            .filter(
-                models.WellnessRecord.employee_id == employee.id,
-                models.WellnessRecord.date >= seven_days_ago
-            )
-            .all()
-        )
+        records = db.query(models.WellnessRecord).filter(
+            models.WellnessRecord.employee_id == employee.id,
+            models.WellnessRecord.date >= seven_days_ago
+        ).order_by(models.WellnessRecord.date).all()
 
         if not records:
             continue
@@ -331,6 +334,7 @@ def ai_insights(
         avg_fatigue = sum(r.fatigue_score for r in records) / len(records)
         avg_productivity = sum(r.productivity_score for r in records) / len(records)
 
+        # Employee level indicators
         if avg_sleep < 6:
             low_sleep += 1
 
@@ -343,21 +347,92 @@ def ai_insights(
         if avg_productivity < 4:
             low_productivity += 1
 
+        # Burnout score
+        burnout_score = (
+            (10 - avg_sleep) * 2 +
+            avg_hours * 1.5 +
+            avg_fatigue * 2 +
+            (10 - avg_productivity) * 1.5
+        )
+
+        if burnout_score > 70:
+            high_burnout += 1
+
+        # Department aggregation
+        dept = employee.department
+
+        if dept not in department_scores:
+            department_scores[dept] = []
+
+        department_scores[dept].append(burnout_score)
+
+        # Trend detection (last record vs first record)
+        if len(records) >= 2:
+            first = records[0]
+            last = records[-1]
+
+            if last.fatigue_score > first.fatigue_score + 2:
+                insights.append(
+                    f"Increasing fatigue trend detected for employees in {dept} department."
+                )
+
+            if last.sleep_hours < first.sleep_hours - 1:
+                insights.append(
+                    f"Sleep reduction trend observed in {dept} department."
+                )
+
+    # General insights
     if low_sleep:
-        insights.append(f"{low_sleep} employees sleeping less than 6 hours on average this week.")
+        insights.append(f"{low_sleep} employees averaging less than 6 hours of sleep.")
 
     if long_hours:
-        insights.append(f"{long_hours} employees working more than 9 hours daily.")
+        insights.append(f"{long_hours} employees consistently working more than 9 hours daily.")
 
     if high_fatigue:
-        insights.append(f"{high_fatigue} employees reporting high fatigue.")
+        insights.append(f"{high_fatigue} employees reporting high fatigue levels.")
 
     if low_productivity:
-        insights.append(f"{low_productivity} employees showing burnout risk due to low productivity.")
+        insights.append(f"{low_productivity} employees showing declining productivity.")
+
+    if high_burnout:
+        insights.append(f"{high_burnout} employees at high burnout risk.")
+
+    # Department burnout insights
+    for dept, scores in department_scores.items():
+
+        avg_score = sum(scores) / len(scores)
+
+        if avg_score > 70:
+            insights.append(f"{dept} department showing severe burnout risk.")
+
+        elif avg_score > 50:
+            insights.append(f"{dept} department experiencing moderate stress levels.")
+
+    # HR recommendations
+    if low_sleep > 0:
+        recommendations.append(
+            "Encourage better work-life balance and discourage late-night work."
+        )
+
+    if long_hours > 0:
+        recommendations.append(
+            "Review workload distribution to reduce excessive working hours."
+        )
+
+    if high_fatigue > 0:
+        recommendations.append(
+            "Promote short breaks and mental health support programs."
+        )
+
+    if high_burnout > 0:
+        recommendations.append(
+            "Consider wellness initiatives or counseling for high-risk employees."
+        )
 
     if not insights:
-        insights.append("No major burnout risks detected this week.")
+        insights.append("Employee wellness trends appear stable this week.")
 
     return {
-        "insights": insights
+        "insights": insights,
+        "recommendations": recommendations
     }
