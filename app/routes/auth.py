@@ -23,13 +23,17 @@ def register_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
     if existing_user:
         raise HTTPException(status_code=400, detail="Email already registered")
 
+    manager_id = user.manager_id if user.manager_id != 0 else None
+
     new_user = models.User(
-        name=user.name,
-        email=user.email,
-        password=hash_password(user.password),
-        role=user.role,
-        department=user.department
-    )
+    name=user.name,
+    email=user.email,
+    password=hash_password(user.password),
+    role=user.role,
+    department=user.department,
+    manager_id=manager_id
+)
+    
 
     db.add(new_user)
     db.commit()

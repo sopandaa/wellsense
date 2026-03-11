@@ -6,6 +6,8 @@ from . import models
 from app.routes.auth import router as auth_router
 from app.routes.wellness import router as wellness_router
 from fastapi.middleware.cors import CORSMiddleware
+from app.routes.manager import router as manager_router
+
 
 app = FastAPI(title="WellSense AI")
 
@@ -20,6 +22,8 @@ app.add_middleware(
 
 app.include_router(auth_router)
 app.include_router(wellness_router)
+app.include_router(manager_router)
+
 
 @app.get("/")
 def read_root():

@@ -8,6 +8,7 @@ class UserCreate(BaseModel):
     password: str
     role: str
     department: str | None = None
+    manager_id: int | None = None
 
 class UserResponse(BaseModel):
     id: int
@@ -15,6 +16,7 @@ class UserResponse(BaseModel):
     email: str
     role: str
     department: str | None
+    manager_id: int | None = None
 
     class Config:
         orm_mode = True

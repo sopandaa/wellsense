@@ -9,6 +9,9 @@ from datetime import date
 from sqlalchemy import UniqueConstraint
  
 
+ 
+
+
 class User(Base):
     __tablename__ = "users"
 
@@ -16,11 +19,21 @@ class User(Base):
     name = Column(String, nullable=False)
     email = Column(String, unique=True, index=True, nullable=False)
     password = Column(String, nullable=False)
-     
+
     department = Column(String, nullable=True)
     role = Column(String, default="EMPLOYEE", nullable=False)
+
     company_id = Column(Integer, ForeignKey("companies.id"), nullable=True)
+
+    # NEW
+    manager_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+
     company = relationship("Company", backref="users")
+
+    # self-referencing relationship
+    manager = relationship("User", remote_side=[id], backref="team_members")
+
+
 
 
 
