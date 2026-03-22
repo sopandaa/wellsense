@@ -9,6 +9,16 @@ import RiskPieChart from "../components/charts/RiskPieChart";
 import DepartmentCard from "../components/DepartmentCard";
 import EmployeeTable from "../components/EmployeeTable";
 
+import TeamHeatmap from "../components/TeamHeatmap";
+
+
+
+
+
+
+
+
+
 function Dashboard({ onLogout }) {
 
   const [departments, setDepartments] = useState([]);
@@ -96,9 +106,23 @@ function Dashboard({ onLogout }) {
       </h2>
 
       <EmployeeTable employees={employees} />
+    
+
+      
+      <TeamHeatmap />
+    
 
     </div>
-  );
+
+  
+  
+
+  
+    
+
+  
+
+);
 }
 
 export default Dashboard;

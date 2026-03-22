@@ -6,6 +6,15 @@ import Login from "./pages/Login";
 import Dashboard from "./pages/DashboardPage";
 import EmployeeProfile from "./pages/EmployeeProfile";
 
+
+
+  
+
+
+
+
+
+
 function App() {
 
   const [token, setToken] = useState(localStorage.getItem("token"));
