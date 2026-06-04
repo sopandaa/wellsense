@@ -121,10 +121,10 @@ def team_risk(
 @router.get("/team-heatmap")
 def get_team_heatmap(manager_id: int, days: int = 7, db: Session = Depends(get_db)):
 
-    # 1️⃣ Get team members
+    
     team = db.query(User).filter(User.manager_id == manager_id).all()
 
-     # instead of today()
+     
     latest_record = db.query(WellnessRecord)\
     .order_by(WellnessRecord.date.desc())\
     .first()

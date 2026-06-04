@@ -13,9 +13,7 @@ from collections import defaultdict
 router = APIRouter(prefix="/wellness", tags=["Wellness"])
 
 
-# -----------------------------
-# TOP 5 HIGH RISK EMPLOYEES
-# -----------------------------
+
 @router.get("/employee-risk")
 def employee_risk(
     db: Session = Depends(get_db),
@@ -62,9 +60,8 @@ def employee_risk(
     return results
 
 
-# -----------------------------
-# DEPARTMENT RISK
-# -----------------------------
+
+
 @router.get("/department-risk")
 def department_risk(
     db: Session = Depends(get_db),
@@ -127,9 +124,9 @@ def department_risk(
 
     return response
 
-# -----------------------------
-# COMPANY TREND
-# -----------------------------
+
+
+
 @router.get("/company-trend")
 def company_trend(
     db: Session = Depends(get_db),
@@ -176,9 +173,9 @@ def company_trend(
     return trend
 
 
-# -----------------------------
-# RISK DISTRIBUTION
-# -----------------------------
+
+
+
 @router.get("/risk-distribution")
 def risk_distribution(
     db: Session = Depends(get_db),
@@ -221,9 +218,8 @@ def risk_distribution(
     return distribution
 
 
-# -----------------------------
-# EMPLOYEE PROFILE
-# -----------------------------
+
+
 @router.get("/employee-risk/{employee_id}")
 def employee_profile(
     employee_id: int,
@@ -255,9 +251,9 @@ def employee_profile(
     }
 
 
-# -----------------------------
-# EMPLOYEE TREND
-# -----------------------------
+
+
+
 @router.get("/employee-trend/{employee_id}")
 def employee_trend(
     employee_id: int,

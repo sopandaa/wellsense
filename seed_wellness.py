@@ -5,7 +5,7 @@ from app import models
 
 db = SessionLocal()
 
-# Get all employees
+
 employees = db.query(models.User).filter(models.User.role == "EMPLOYEE").all()
 
 for employee in employees:

@@ -77,7 +77,7 @@ function Dashboard({ onLogout }) {
 
       <Navbar onLogout={onLogout} />
 
-      <AIInsights insights={insights} />
+       <AIInsights insights={insights} /> 
 
       <h2 className="text-xl font-bold mb-4">
         Burnout Trend

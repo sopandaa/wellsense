@@ -23,7 +23,8 @@ function TeamHeatmap() {
 
       setData(res.data);
 
-      // extract unique dates
+      
+
       const allDates = new Set();
       Object.values(res.data).forEach(emp => {
         Object.keys(emp).forEach(date => allDates.add(date));

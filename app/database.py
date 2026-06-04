@@ -31,7 +31,7 @@ SessionLocal = sessionmaker(
 
 Base = declarative_base()
 
-# Dependency for FastAPI
+
 def get_db():
     db = SessionLocal()
     try:

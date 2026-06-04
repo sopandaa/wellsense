@@ -49,7 +49,7 @@ def verify_token(token: str):
             return None
         return email
     except JWTError as e:
-        print("JWT Error:", e)   # 👈 ADD THIS LINE
+        print("JWT Error:", e)   
         return None
 
 

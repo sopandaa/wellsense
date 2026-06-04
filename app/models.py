@@ -30,7 +30,8 @@ class User(Base):
 
     company = relationship("Company", backref="users")
 
-    # self-referencing relationship
+    
+    
     manager = relationship("User", remote_side=[id], backref="team_members")
 
 
